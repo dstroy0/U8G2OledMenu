@@ -161,10 +161,10 @@ public:
     void initDisplay();
 
     /// @brief Display the current page
-    void displayPage();
+    void displayCurrentPage();
 
     /// @brief Display text on the screen
-    void display();
+    void displayTextOnScreen();
 
     /// @brief Add a page to the menu
     /// @param type Type of the page
@@ -173,7 +173,7 @@ public:
     /// @param page_buffer Buffer for the page content
     /// @param page_buffer_size Size of the page buffer
     /// @return True if the page was added successfully, false otherwise
-    bool addPage(MENU::structs::PAGE_TYPE type, bool interactive, MENU::structs::menu_callback callback, char *page_buffer = nullptr, uint16_t page_buffer_size = 0);
+    bool addMenuPage(MENU::structs::PAGE_TYPE type, bool interactive, MENU::structs::menu_callback callback, char *page_buffer = nullptr, uint16_t page_buffer_size = 0);
 
     /// @brief Add an error page to the menu
     /// @param callback Callback function for the error page
@@ -181,22 +181,22 @@ public:
     bool addErrorPage(MENU::structs::menu_callback callback);
 
     /// @brief Refresh the display
-    void refresh();
+    void refreshDisplay();
 
     /// @brief Move to the next page
-    void pageForward();
+    void moveToNextPage();
 
     /// @brief Move to the previous page
-    void pageBackward();
+    void moveToPreviousPage();
 
     /// @brief Move up an item in the menu
-    void upItem();
+    void moveUpMenuItem();
 
     /// @brief Move down an item in the menu
-    void downItem();
+    void moveDownMenuItem();
 
     /// @brief Clear the display buffer
-    void clearBuffer();
+    void clearDisplayBuffer();
 
     /// @brief Clear the page buffer
     void clearPageBuffer();
@@ -206,73 +206,73 @@ public:
 
     /// @brief Check if there is an active error
     /// @return True if there is an active error, false otherwise
-    bool activeError();
+    bool hasActiveError();
 
     /// @brief Show an error message
     /// @param fmt Format string for the error message
     /// @param ... Additional arguments for the format string
     /// @return Length of the error message
-    int showError(const char *fmt, ...);
+    int showErrorMessage(const char *fmt, ...);
 
     /// @brief Check if a page is entered
     /// @return True if a page is entered, false otherwise
-    bool pageEntered();
+    bool isPageEntered();
 
     /// @brief Exit the current page
-    void exitPage();
+    void exitCurrentPage();
 
     /// @brief Check if the current page is interactive
     /// @return True if the current page is interactive, false otherwise
-    bool pageIsInteractive();
+    bool isCurrentPageInteractive();
 
     /// @brief Enter the current page
     /// @return True if the page was entered successfully, false otherwise
-    bool enterPage();
+    bool enterCurrentPage();
 
     /// @brief Set the text to be displayed and scrolled.
     /// @param txt The text to be displayed.
-    void setText(const char *txt);
+    void setScrollText(const char *txt);
 
     /// @brief Set the text to be displayed and scrolled using an external buffer.
     /// @param buf The buffer to hold the text.
     /// @param bufSize The size of the buffer.
-    void setText(char *buf, size_t bufSize);
+    void setScrollText(char *buf, size_t bufSize);
 
     /// @brief Display the text on the screen.
     /// @param showCursor Whether to show the cursor.
-    void displayText(bool showCursor);
+    void displayScrollText(bool showCursor);
 
     /// @brief Manage the blinking state of the cursor.
-    void manageBlink();
+    void manageCursorBlink();
 
     /// @brief Blink the text at the cursor position.
-    void blinkTextAtCursor();
+    void blinkTextAtCursorPosition();
 
     /// @brief Set the number of display lines.
     /// @param num_lines Number of lines to display.
-    void setDisplayLines(int num_lines);
+    void setNumberOfDisplayLines(int num_lines);
 
     /// @brief Get the number of display lines.
     /// @return Number of lines to display.
-    int getDisplayLines();
+    int getNumberOfDisplayLines();
 
     /// @brief Set the font size based on the number of lines to be displayed.
-    void setFontForLineLimits();
+    void setFontSizeForLineLimits();
 
     /// @brief Get the current X position of the cursor.
     /// @return The X position of the cursor.
-    int getCursorX();
+    int getCursorXPosition();
 
     /// @brief Get the current Y position of the cursor.
     /// @return The Y position of the cursor.
-    int getCursorY();
+    int getCursorYPosition();
 
     /// @brief Get the width of a character in the current font.
     /// @return The width of a character.
-    int fontCharWidth();
+    int getFontCharacterWidth();
 
     /// @brief Update the display, managing blinking and cursor state.
-    void update();
+    void updateDisplay();
 
 private:
     /// @brief Get the menu page info for a given page

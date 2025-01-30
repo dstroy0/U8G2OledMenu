@@ -47,7 +47,7 @@ void OledMenu::initDisplay()
 }
 
 /// @brief Display the current page
-void OledMenu::displayPage()
+void OledMenu::displayCurrentPage()
 {
     if (display_connected)
     {
@@ -55,23 +55,23 @@ void OledMenu::displayPage()
         if (page_info->callback)
         {
             page_info->callback(page_info);
-            setText(page_info->buffer, page_info->buffer_size);
+            setScrollText(page_info->buffer, page_info->buffer_size);
         }
         else
         {
-            setText(page_info->buffer, page_info->buffer_size);
+            setScrollText(page_info->buffer, page_info->buffer_size);
         }
-        displayText(false);
+        displayScrollText(false);
     }
 }
 
 /// @brief Display text on the screen
-void OledMenu::display()
+void OledMenu::displayTextOnScreen()
 {
     if (display_connected)
     {
-        setText("Hello");
-        displayText(false);
+        setScrollText("Hello");
+        displayScrollText(false);
     }
 }
 
@@ -82,7 +82,7 @@ void OledMenu::display()
 /// @param page_buffer Buffer for the page content
 /// @param page_buffer_size Size of the page buffer
 /// @return True if the page was added successfully, false otherwise
-bool OledMenu::addPage(MENU::structs::PAGE_TYPE type, bool interactive, MENU::structs::menu_callback callback, char *page_buffer, uint16_t page_buffer_size)
+bool OledMenu::addMenuPage(MENU::structs::PAGE_TYPE type, bool interactive, MENU::structs::menu_callback callback, char *page_buffer, uint16_t page_buffer_size)
 {
     if (page_buffer == nullptr || page_buffer_size == 0)
     {
@@ -108,16 +108,16 @@ bool OledMenu::addErrorPage(MENU::structs::menu_callback callback)
 }
 
 /// @brief Refresh the display
-void OledMenu::refresh()
+void OledMenu::refreshDisplay()
 {
     if (display_connected)
     {
-        update();
+        updateDisplay();
     }
 }
 
 /// @brief Move to the next page
-void OledMenu::pageForward()
+void OledMenu::moveToNextPage()
 {
     if (current_page_displayed < num_pages)
     {
@@ -130,7 +130,7 @@ void OledMenu::pageForward()
 }
 
 /// @brief Move to the previous page
-void OledMenu::pageBackward()
+void OledMenu::moveToPreviousPage()
 {
     if (current_page_displayed > 0)
     {
@@ -144,7 +144,7 @@ void OledMenu::pageBackward()
 }
 
 /// @brief Move up an item in the menu
-void OledMenu::upItem()
+void OledMenu::moveUpMenuItem()
 {
     page_info = getMenuPageInfo(current_page_displayed);
 
@@ -160,7 +160,7 @@ void OledMenu::upItem()
 }
 
 /// @brief Move down an item in the menu
-void OledMenu::downItem()
+void OledMenu::moveDownMenuItem()
 {
     page_info = getMenuPageInfo(current_page_displayed);
     if (page_info->page_line < page_info->num_lines)
@@ -174,7 +174,7 @@ void OledMenu::downItem()
 }
 
 /// @brief Clear the display buffer
-void OledMenu::clearBuffer()
+void OledMenu::clearDisplayBuffer()
 {
     memset(&display_buffer, '\0', display_buffer_size);
 }
@@ -200,7 +200,7 @@ void OledMenu::acknowledgeError()
 
 /// @brief Check if there is an active error
 /// @return True if there is an active error, false otherwise
-bool OledMenu::activeError()
+bool OledMenu::hasActiveError()
 {
     return OledMenu::error_message_display_override;
 }
@@ -209,7 +209,7 @@ bool OledMenu::activeError()
 /// @param fmt Format string for the error message
 /// @param ... Additional arguments for the format string
 /// @return Length of the error message
-int OledMenu::showError(const char *fmt, ...)
+int OledMenu::showErrorMessage(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -230,29 +230,29 @@ int OledMenu::showError(const char *fmt, ...)
 
 /// @brief Check if a page is entered
 /// @return True if a page is entered, false otherwise
-bool OledMenu::pageEntered()
+bool OledMenu::isPageEntered()
 {
     return page_entered;
 }
 
 /// @brief Exit the current page
-void OledMenu::exitPage()
+void OledMenu::exitCurrentPage()
 {
     page_entered = false;
 }
 
 /// @brief Check if the current page is interactive
 /// @return True if the current page is interactive, false otherwise
-bool OledMenu::pageIsInteractive()
+bool OledMenu::isCurrentPageInteractive()
 {
     return pages.getStoragePtr(current_page_displayed)->interactive;
 }
 
 /// @brief Enter the current page
 /// @return True if the page was entered successfully, false otherwise
-bool OledMenu::enterPage()
+bool OledMenu::enterCurrentPage()
 {
-    if (pageIsInteractive())
+    if (isCurrentPageInteractive())
     {
         page_entered = true;
         return true;
@@ -278,7 +278,7 @@ MENU::structs::errorPageInfo *OledMenu::getErrorPageInfo(uint8_t page)
 
 /// @brief Set the text to be displayed and scrolled.
 /// @param txt The text to be displayed.
-void OledMenu::setText(const char *txt)
+void OledMenu::setScrollText(const char *txt)
 {
     text = txt;
     buffer = nullptr;
@@ -288,7 +288,7 @@ void OledMenu::setText(const char *txt)
 /// @brief Set the text to be displayed and scrolled using an external buffer.
 /// @param buf The buffer to hold the text.
 /// @param bufSize The size of the buffer.
-void OledMenu::setText(char *buf, size_t bufSize)
+void OledMenu::setScrollText(char *buf, size_t bufSize)
 {
     text = nullptr;
     buffer = buf;
@@ -297,14 +297,14 @@ void OledMenu::setText(char *buf, size_t bufSize)
 
 /// @brief Display the text on the screen.
 /// @param showCursor Whether to show the cursor.
-void OledMenu::displayText(bool showCursor)
+void OledMenu::displayScrollText(bool showCursor)
 {
     if (text == nullptr && buffer == nullptr)
     {
         return;
     }
     display_hal.clearBuffer();
-    setFontForLineLimits();
+    setFontSizeForLineLimits();
     display_hal.setFontMode(1); // Enable transparent mode for highlighting
 
     int lineSpacing = display_hal.getMaxCharHeight();
@@ -351,7 +351,7 @@ void OledMenu::displayText(bool showCursor)
 }
 
 /// @brief Manage the blinking state of the cursor.
-void OledMenu::manageBlink()
+void OledMenu::manageCursorBlink()
 {
     unsigned long currentTime = millis();
     if (blinkEnabled && (currentTime - lastBlinkTime >= blinkInterval))
@@ -362,14 +362,14 @@ void OledMenu::manageBlink()
 }
 
 /// @brief Blink the text at the cursor position.
-void OledMenu::blinkTextAtCursor()
+void OledMenu::blinkTextAtCursorPosition()
 {
-    displayText(blinkState);
+    displayScrollText(blinkState);
 }
 
 /// @brief Set the number of display lines.
 /// @param num_lines Number of lines to display.
-void OledMenu::setDisplayLines(int num_lines)
+void OledMenu::setNumberOfDisplayLines(int num_lines)
 {
     if (num_lines >= minLines && num_lines <= maxLines)
     {
@@ -387,13 +387,13 @@ void OledMenu::setDisplayLines(int num_lines)
 
 /// @brief Get the number of display lines.
 /// @return Number of lines to display.
-int OledMenu::getDisplayLines()
+int OledMenu::getNumberOfDisplayLines()
 {
     return dispLines;
 }
 
 /// @brief Set the font size based on the number of lines to be displayed.
-void OledMenu::setFontForLineLimits()
+void OledMenu::setFontSizeForLineLimits()
 {
     uint8_t fontPixelHeight = display_hal.getDisplayHeight() / dispLines;
     if (fontPixelHeight >= fontMinPixelHeight && fontPixelHeight <= fontMaxPixelHeight)
@@ -419,30 +419,30 @@ void OledMenu::setFontForLineLimits()
 
 /// @brief Get the current X position of the cursor.
 /// @return The X position of the cursor.
-int OledMenu::getCursorX()
+int OledMenu::getCursorXPosition()
 {
     return cursorX;
 }
 
 /// @brief Get the current Y position of the cursor.
 /// @return The Y position of the cursor.
-int OledMenu::getCursorY()
+int OledMenu::getCursorYPosition()
 {
     return cursorY;
 }
 
 /// @brief Get the width of a character in the current font.
 /// @return The width of a character.
-int OledMenu::fontCharWidth()
+int OledMenu::getFontCharacterWidth()
 {
     return display_hal.getMaxCharWidth();
 }
 
 /// @brief Update the display, managing blinking and cursor state.
-void OledMenu::update()
+void OledMenu::updateDisplay()
 {
-    blinkTextAtCursor();
-    manageBlink();
+    blinkTextAtCursorPosition();
+    manageCursorBlink();
 }
 
 /// @brief Function to display connection information on the OLED menu
