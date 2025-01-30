@@ -1,206 +1,24 @@
 #include "U8G2OledMenu.h"
 
-/// @brief Constructor for OLEDTextScroller
-/// @param display Reference to the U8G2 display object
-OLEDTextScroller::OLEDTextScroller(U8G2 &display) : display(display), text(nullptr), buffer(nullptr), bufferSize(0),
-                                                    cursorX(0), cursorY(0), blinkState(false), blinkEnabled(false),
-                                                    highlightEnabled(false), lastBlinkTime(0), minLines(1), maxLines(10),
-                                                    dispLines(4), u8g2_font_lookup_table{
-                                                                      u8g2_font_3x3basic_tr, u8g2_font_u8glib_4_tr, u8g2_font_tiny5_tr, u8g2_font_5x7_tr,
-                                                                      u8g2_font_6x10_tr, u8g2_font_t0_11_tr, u8g2_font_6x13_tr, u8g2_font_7x14_tr,
-                                                                      u8g2_font_t0_17_tr, u8g2_font_helvR12_tr, u8g2_font_10x20_tf, u8g2_font_profont22_tr,
-                                                                      u8g2_font_courB18_tr, u8g2_font_crox5t_tr, u8g2_font_crox5h_tr, u8g2_font_ncenR18_tr,
-                                                                      u8g2_font_courR24_tr, u8g2_font_fur20_tr, u8g2_font_osr21_tr, u8g2_font_logisoso22_tr,
-                                                                      u8g2_font_timR24_tr}
-{
-}
-
-/// @brief Set the text to be displayed and scrolled.
-/// @param txt The text to be displayed.
-void OLEDTextScroller::setText(const char *txt)
-{
-    text = txt;
-    buffer = nullptr;
-    bufferSize = 0;
-}
-
-/// @brief Set the text to be displayed and scrolled using an external buffer.
-/// @param buf The buffer to hold the text.
-/// @param bufSize The size of the buffer.
-void OLEDTextScroller::setText(char *buf, size_t bufSize)
-{
-    text = nullptr;
-    buffer = buf;
-    bufferSize = bufSize;
-}
-
-/// @brief Display the text on the screen.
-/// @param showCursor Whether to show the cursor.
-void OLEDTextScroller::displayText(bool showCursor)
-{
-    if (text == nullptr && buffer == nullptr)
-    {
-        return;
-    }
-    display.clearBuffer();
-    setFontForLineLimits();
-    display.setFontMode(1); // Enable transparent mode for highlighting
-
-    int lineSpacing = display.getMaxCharHeight();
-    int maxLines = display.getDisplayHeight() / lineSpacing;
-    char *line;
-    char *savePtr;
-
-    if (buffer)
-    {
-        line = strtok_r(buffer, "\n", &savePtr);
-    }
-    else
-    {
-        const char *tempText = text;
-        line = strtok_r(const_cast<char *>(tempText), "\n", &savePtr);
-    }
-
-    int currentY = cursorY;
-    int lineCount = 0;
-    while (line != NULL && lineCount < maxLines)
-    {
-        if (highlightEnabled)
-        {
-            display.drawBox(0, currentY - lineSpacing, display.getDisplayWidth(), lineSpacing);
-        }
-        display.drawStr(cursorX, currentY, line);
-        if (showCursor)
-        {
-            display.drawVLine(cursorX, currentY - lineSpacing, lineSpacing);
-        }
-        currentY += lineSpacing;
-        line = strtok_r(NULL, "\n", &savePtr);
-        lineCount++;
-    }
-
-    // Fill remaining lines with empty space if less than maxLines
-    while (lineCount < maxLines)
-    {
-        currentY += lineSpacing;
-        lineCount++;
-    }
-
-    display.sendBuffer();
-}
-
-/// @brief Manage the blinking state of the cursor.
-void OLEDTextScroller::manageBlink()
-{
-    unsigned long currentTime = millis();
-    if (blinkEnabled && (currentTime - lastBlinkTime >= blinkInterval))
-    {
-        blinkState = !blinkState;
-        lastBlinkTime = currentTime;
-    }
-}
-
-/// @brief Blink the text at the cursor position.
-void OLEDTextScroller::blinkTextAtCursor()
-{
-    displayText(blinkState);
-}
-
-/// @brief Set the number of display lines.
-/// @param num_lines Number of lines to display.
-void OLEDTextScroller::setDisplayLines(int num_lines)
-{
-    if (num_lines >= minLines && num_lines <= maxLines)
-    {
-        dispLines = num_lines;
-    }
-    else if (num_lines < minLines)
-    {
-        dispLines = minLines;
-    }
-    else if (num_lines > maxLines)
-    {
-        dispLines = maxLines;
-    }
-}
-
-/// @brief Get the number of display lines.
-/// @return Number of lines to display.
-int OLEDTextScroller::getDisplayLines()
-{
-    return dispLines;
-}
-
-/// @brief Set the font size based on the number of lines to be displayed.
-void OLEDTextScroller::setFontForLineLimits()
-{
-    uint8_t fontPixelHeight = display.getDisplayHeight() / dispLines;
-    if (fontPixelHeight >= fontMinPixelHeight && fontPixelHeight <= fontMaxPixelHeight)
-    {
-        // Ensure the lookup table is defined and within bounds
-        uint8_t index = fontPixelHeight - fontMinPixelHeight;
-        if (index < sizeof(u8g2_font_lookup_table) / sizeof(u8g2_font_lookup_table[0]))
-        {
-            display.setFont(u8g2_font_lookup_table[index]);
-        }
-        else
-        {
-            // Handle out-of-bounds index
-            display.setFont(u8g2_font_helvB08_tf); // Default font as fallback
-        }
-    }
-    else
-    {
-        // Handle fontPixelHeight out of range
-        display.setFont(u8g2_font_helvB08_tf); // Default font as fallback
-    }
-}
-
-/// @brief Get the current X position of the cursor.
-/// @return The X position of the cursor.
-int OLEDTextScroller::getCursorX()
-{
-    return cursorX;
-}
-
-/// @brief Get the current Y position of the cursor.
-/// @return The Y position of the cursor.
-int OLEDTextScroller::getCursorY()
-{
-    return cursorY;
-}
-
-/// @brief Get the width of a character in the current font.
-/// @return The width of a character.
-int OLEDTextScroller::fontCharWidth()
-{
-    return display.getMaxCharWidth();
-}
-
-/// @brief Update the display, managing blinking and cursor state.
-void OLEDTextScroller::update()
-{
-    blinkTextAtCursor();
-    manageBlink();
-}
-
 /// @brief Constructor for OledMenu
 /// @param display Reference to the U8G2 display object
 /// @param buffer_size Size of the display buffer
 /// @param text_blink_delay Delay for text blinking
 OledMenu::OledMenu(U8G2 &display, uint16_t buffer_size, uint32_t text_blink_delay)
-    : OLEDTextScroller(display), current_page_displayed(0), page_entered(false),
-      line_blinking(false), page_info(nullptr),
-      error_message_display_override(false), num_error(0),
-      display_hal(display),
-      display_buffer_size(buffer_size),
-      mmptr(new MemoryManager(buffer_size)),
-      display_buffer(*mmptr),
-      error_buffer_(reinterpret_cast<char *>(display_buffer.allocate(display_buffer.size() - 1))),
-      error_buffer_size(0),
-      num_pages(0),
-      page_buffer_(reinterpret_cast<char *>(display_buffer.allocate(display_buffer.size() / 2 - 1))),
-      page_buffer_size(0)
+    : display_hal(display), display_buffer_size(buffer_size), mmptr(new MemoryManager(buffer_size)),
+      display_buffer(*mmptr), error_buffer_(reinterpret_cast<char *>(display_buffer.allocate(display_buffer.size() - 1))),
+      error_buffer_size(0), num_pages(0), page_buffer_(reinterpret_cast<char *>(display_buffer.allocate(display_buffer.size() / 2 - 1))),
+      page_buffer_size(0), num_error(0), error_message_display_override(false), current_page_displayed(0),
+      page_entered(false), line_blinking(false), display_connected(false), page_info(nullptr),
+      text(nullptr), buffer(nullptr), bufferSize(0), cursorX(0), cursorY(0), blinkState(false), blinkEnabled(false),
+      highlightEnabled(false), lastBlinkTime(0), minLines(1), maxLines(10), dispLines(4),
+      u8g2_font_lookup_table{
+          u8g2_font_3x3basic_tr, u8g2_font_u8glib_4_tr, u8g2_font_tiny5_tr, u8g2_font_5x7_tr,
+          u8g2_font_6x10_tr, u8g2_font_t0_11_tr, u8g2_font_6x13_tr, u8g2_font_7x14_tr,
+          u8g2_font_t0_17_tr, u8g2_font_helvR12_tr, u8g2_font_10x20_tf, u8g2_font_profont22_tr,
+          u8g2_font_courB18_tr, u8g2_font_crox5t_tr, u8g2_font_crox5h_tr, u8g2_font_ncenR18_tr,
+          u8g2_font_courR24_tr, u8g2_font_fur20_tr, u8g2_font_osr21_tr, u8g2_font_logisoso22_tr,
+          u8g2_font_timR24_tr}
 {
 }
 
@@ -456,6 +274,175 @@ MENU::structs::menuPageInfo *OledMenu::getMenuPageInfo(uint8_t page)
 MENU::structs::errorPageInfo *OledMenu::getErrorPageInfo(uint8_t page)
 {
     return error_pages.getStoragePtr(page);
+}
+
+/// @brief Set the text to be displayed and scrolled.
+/// @param txt The text to be displayed.
+void OledMenu::setText(const char *txt)
+{
+    text = txt;
+    buffer = nullptr;
+    bufferSize = 0;
+}
+
+/// @brief Set the text to be displayed and scrolled using an external buffer.
+/// @param buf The buffer to hold the text.
+/// @param bufSize The size of the buffer.
+void OledMenu::setText(char *buf, size_t bufSize)
+{
+    text = nullptr;
+    buffer = buf;
+    bufferSize = bufSize;
+}
+
+/// @brief Display the text on the screen.
+/// @param showCursor Whether to show the cursor.
+void OledMenu::displayText(bool showCursor)
+{
+    if (text == nullptr && buffer == nullptr)
+    {
+        return;
+    }
+    display_hal.clearBuffer();
+    setFontForLineLimits();
+    display_hal.setFontMode(1); // Enable transparent mode for highlighting
+
+    int lineSpacing = display_hal.getMaxCharHeight();
+    int maxLines = display_hal.getDisplayHeight() / lineSpacing;
+    char *line;
+    char *savePtr;
+
+    if (buffer)
+    {
+        line = strtok_r(buffer, "\n", &savePtr);
+    }
+    else
+    {
+        const char *tempText = text;
+        line = strtok_r(const_cast<char *>(tempText), "\n", &savePtr);
+    }
+
+    int currentY = cursorY;
+    int lineCount = 0;
+    while (line != NULL && lineCount < maxLines)
+    {
+        if (highlightEnabled)
+        {
+            display_hal.drawBox(0, currentY - lineSpacing, display_hal.getDisplayWidth(), lineSpacing);
+        }
+        display_hal.drawStr(cursorX, currentY, line);
+        if (showCursor)
+        {
+            display_hal.drawVLine(cursorX, currentY - lineSpacing, lineSpacing);
+        }
+        currentY += lineSpacing;
+        line = strtok_r(NULL, "\n", &savePtr);
+        lineCount++;
+    }
+
+    // Fill remaining lines with empty space if less than maxLines
+    while (lineCount < maxLines)
+    {
+        currentY += lineSpacing;
+        lineCount++;
+    }
+
+    display_hal.sendBuffer();
+}
+
+/// @brief Manage the blinking state of the cursor.
+void OledMenu::manageBlink()
+{
+    unsigned long currentTime = millis();
+    if (blinkEnabled && (currentTime - lastBlinkTime >= blinkInterval))
+    {
+        blinkState = !blinkState;
+        lastBlinkTime = currentTime;
+    }
+}
+
+/// @brief Blink the text at the cursor position.
+void OledMenu::blinkTextAtCursor()
+{
+    displayText(blinkState);
+}
+
+/// @brief Set the number of display lines.
+/// @param num_lines Number of lines to display.
+void OledMenu::setDisplayLines(int num_lines)
+{
+    if (num_lines >= minLines && num_lines <= maxLines)
+    {
+        dispLines = num_lines;
+    }
+    else if (num_lines < minLines)
+    {
+        dispLines = minLines;
+    }
+    else if (num_lines > maxLines)
+    {
+        dispLines = maxLines;
+    }
+}
+
+/// @brief Get the number of display lines.
+/// @return Number of lines to display.
+int OledMenu::getDisplayLines()
+{
+    return dispLines;
+}
+
+/// @brief Set the font size based on the number of lines to be displayed.
+void OledMenu::setFontForLineLimits()
+{
+    uint8_t fontPixelHeight = display_hal.getDisplayHeight() / dispLines;
+    if (fontPixelHeight >= fontMinPixelHeight && fontPixelHeight <= fontMaxPixelHeight)
+    {
+        // Ensure the lookup table is defined and within bounds
+        uint8_t index = fontPixelHeight - fontMinPixelHeight;
+        if (index < sizeof(u8g2_font_lookup_table) / sizeof(u8g2_font_lookup_table[0]))
+        {
+            display_hal.setFont(u8g2_font_lookup_table[index]);
+        }
+        else
+        {
+            // Handle out-of-bounds index
+            display_hal.setFont(u8g2_font_helvB08_tf); // Default font as fallback
+        }
+    }
+    else
+    {
+        // Handle fontPixelHeight out of range
+        display_hal.setFont(u8g2_font_helvB08_tf); // Default font as fallback
+    }
+}
+
+/// @brief Get the current X position of the cursor.
+/// @return The X position of the cursor.
+int OledMenu::getCursorX()
+{
+    return cursorX;
+}
+
+/// @brief Get the current Y position of the cursor.
+/// @return The Y position of the cursor.
+int OledMenu::getCursorY()
+{
+    return cursorY;
+}
+
+/// @brief Get the width of a character in the current font.
+/// @return The width of a character.
+int OledMenu::fontCharWidth()
+{
+    return display_hal.getMaxCharWidth();
+}
+
+/// @brief Update the display, managing blinking and cursor state.
+void OledMenu::update()
+{
+    blinkTextAtCursor();
+    manageBlink();
 }
 
 /// @brief Function to display connection information on the OLED menu

@@ -100,81 +100,8 @@ namespace MENU
     };
 };
 
-/// @brief Class for scrolling text on an OLED display
-class OLEDTextScroller
-{
-public:
-    /// @brief Constructor for OLEDTextScroller
-    /// @param display Reference to the U8G2 display object
-    OLEDTextScroller(U8G2 &display);
-
-    /// @brief Set the text to be displayed and scrolled.
-    /// @param txt The text to be displayed.
-    void setText(const char *txt);
-
-    /// @brief Set the text to be displayed and scrolled using an external buffer.
-    /// @param buf The buffer to hold the text.
-    /// @param bufSize The size of the buffer.
-    void setText(char *buf, size_t bufSize);
-
-    /// @brief Display the text on the screen.
-    /// @param showCursor Whether to show the cursor.
-    void displayText(bool showCursor);
-
-    /// @brief Manage the blinking state of the cursor.
-    void manageBlink();
-
-    /// @brief Blink the text at the cursor position.
-    void blinkTextAtCursor();
-
-    /// @brief Set the number of display lines.
-    /// @param num_lines Number of lines to display.
-    void setDisplayLines(int num_lines);
-
-    /// @brief Get the number of display lines.
-    /// @return Number of lines to display.
-    int getDisplayLines();
-
-    /// @brief Set the font size based on the number of lines to be displayed.
-    void setFontForLineLimits();
-
-    /// @brief Get the current X position of the cursor.
-    /// @return The X position of the cursor.
-    int getCursorX();
-
-    /// @brief Get the current Y position of the cursor.
-    /// @return The Y position of the cursor.
-    int getCursorY();
-
-    /// @brief Get the width of a character in the current font.
-    /// @return The width of a character.
-    int fontCharWidth();
-
-    /// @brief Update the display, managing blinking and cursor state.
-    void update();
-
-private:
-    U8G2 &display;                             ///< Reference to the U8G2 display object
-    const char *text;                          ///< Text to be displayed
-    char *buffer;                              ///< Buffer to hold the text
-    size_t bufferSize;                         ///< Size of the buffer
-    int cursorX;                               ///< X position of the cursor
-    int cursorY;                               ///< Y position of the cursor
-    bool blinkState;                           ///< State of the blink (on/off)
-    bool blinkEnabled;                         ///< Whether blinking is enabled
-    bool highlightEnabled;                     ///< Whether highlighting is enabled
-    unsigned long lastBlinkTime;               ///< Last time the blink state was updated
-    const int blinkInterval = 500;             ///< Blink interval in milliseconds
-    int minLines;                              ///< Minimum number of lines to display
-    int maxLines;                              ///< Maximum number of lines to display
-    int dispLines;                             ///< Number of lines to display
-    const uint8_t fontMinPixelHeight = 3;      ///< Minimum font pixel height
-    const uint8_t fontMaxPixelHeight = 23;     ///< Maximum font pixel height
-    const uint8_t *u8g2_font_lookup_table[21]; ///< Lookup table for fonts
-};
-
-/// @brief Class representing the OLED menu
-class OledMenu : public OLEDTextScroller
+/// @brief Class representing the OLED menu with text scrolling functionality
+class OledMenu
 {
 public:
     MemoryManager *mmptr; ///< Pointer to the memory manager
@@ -202,6 +129,24 @@ public:
     bool display_connected;                      ///< Flag indicating if the display is connected
 
     MENU::structs::menuPageInfo *page_info; ///< Pointer to the current page info
+
+    // Text scroller variables
+    const char *text;                          ///< Text to be displayed
+    char *buffer;                              ///< Buffer to hold the text
+    size_t bufferSize;                         ///< Size of the buffer
+    int cursorX;                               ///< X position of the cursor
+    int cursorY;                               ///< Y position of the cursor
+    bool blinkState;                           ///< State of the blink (on/off)
+    bool blinkEnabled;                         ///< Whether blinking is enabled
+    bool highlightEnabled;                     ///< Whether highlighting is enabled
+    unsigned long lastBlinkTime;               ///< Last time the blink state was updated
+    const int blinkInterval = 500;             ///< Blink interval in milliseconds
+    int minLines;                              ///< Minimum number of lines to display
+    int maxLines;                              ///< Maximum number of lines to display
+    int dispLines;                             ///< Number of lines to display
+    const uint8_t fontMinPixelHeight = 3;      ///< Minimum font pixel height
+    const uint8_t fontMaxPixelHeight = 23;     ///< Maximum font pixel height
+    const uint8_t *u8g2_font_lookup_table[21]; ///< Lookup table for fonts
 
     /// @brief Constructor for OledMenu
     /// @param display Reference to the U8G2 display object
@@ -283,6 +228,51 @@ public:
     /// @brief Enter the current page
     /// @return True if the page was entered successfully, false otherwise
     bool enterPage();
+
+    /// @brief Set the text to be displayed and scrolled.
+    /// @param txt The text to be displayed.
+    void setText(const char *txt);
+
+    /// @brief Set the text to be displayed and scrolled using an external buffer.
+    /// @param buf The buffer to hold the text.
+    /// @param bufSize The size of the buffer.
+    void setText(char *buf, size_t bufSize);
+
+    /// @brief Display the text on the screen.
+    /// @param showCursor Whether to show the cursor.
+    void displayText(bool showCursor);
+
+    /// @brief Manage the blinking state of the cursor.
+    void manageBlink();
+
+    /// @brief Blink the text at the cursor position.
+    void blinkTextAtCursor();
+
+    /// @brief Set the number of display lines.
+    /// @param num_lines Number of lines to display.
+    void setDisplayLines(int num_lines);
+
+    /// @brief Get the number of display lines.
+    /// @return Number of lines to display.
+    int getDisplayLines();
+
+    /// @brief Set the font size based on the number of lines to be displayed.
+    void setFontForLineLimits();
+
+    /// @brief Get the current X position of the cursor.
+    /// @return The X position of the cursor.
+    int getCursorX();
+
+    /// @brief Get the current Y position of the cursor.
+    /// @return The Y position of the cursor.
+    int getCursorY();
+
+    /// @brief Get the width of a character in the current font.
+    /// @return The width of a character.
+    int fontCharWidth();
+
+    /// @brief Update the display, managing blinking and cursor state.
+    void update();
 
 private:
     /// @brief Get the menu page info for a given page
