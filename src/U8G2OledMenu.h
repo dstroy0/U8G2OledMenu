@@ -38,53 +38,34 @@ namespace MENU
             PAGE_TYPE type;            ///< Type of the page
             const bool interactive;    ///< Whether the page is interactive
             menu_callback callback;    ///< Callback function for the page
-            bool select_item;          ///< Whether an item is selected
-            uint8_t page_line = 0;     ///< Current line on the page
-            uint8_t page_col = 0;      ///< Current column on the page
-            uint8_t num_lines = 0;     ///< Number of lines on the page
-            uint8_t chars_on_line = 0; ///< Number of characters on the current line
+            bool select_item = false;  ///< Whether an item is selected
             char *buffer;              ///< Buffer for the page content
-            uint16_t buffer_size;      ///< Size of the buffer
+            uint16_t target_buffer_size; ///< Size of the buffer
+            uint16_t needs_buffer_size; ///< Size of the buffer needed
             void *parameters;          ///< Additional parameters for the page
+            int anchorX = 0;           ///< X position of the display anchor
+            int anchorY = 0;           ///< Y position of the display anchor
+            int cursorX = 0;           ///< X position of the cursor
+            int cursorY = 0;           ///< Y position of the cursor
+            uint16_t page_line = 0;    ///< Current line on the page
+            uint16_t page_col = 0;     ///< Current column on the page
+            uint16_t num_lines = 0;    ///< Number of lines on the page
+            uint16_t chars_on_line = 0; ///< Number of characters on the current line
+            uint16_t max_chars_on_line = 0; ///< Maximum number of characters on a line
 
             /// @brief Constructor for menuPageInfo
             /// @param page_type Type of the page
             /// @param interactive Whether the page is interactive
             /// @param callback Callback function for the page
             /// @param buffer Buffer for the page content
-            /// @param buffer_size Size of the buffer
-            menuPageInfo(PAGE_TYPE page_type, bool interactive, menu_callback callback, char *buffer, uint16_t buffer_size)
-                : type(page_type), interactive(interactive), callback(callback), buffer(buffer), buffer_size(buffer_size)
+            /// @param target_buffer_size Size of the buffer
+            menuPageInfo(PAGE_TYPE page_type, bool interactive, menu_callback callback, char *buffer, uint16_t target_buffer_size)
+                : type(page_type), interactive(interactive), callback(callback), buffer(buffer), target_buffer_size(target_buffer_size), needs_buffer_size(0)
             {
             }
         };
 
-        /// @brief Struct for error page information
-        struct errorPageInfo
-        {
-            PAGE_TYPE type;            ///< Type of the page
-            const bool interactive;    ///< Whether the page is interactive
-            menu_callback callback;    ///< Callback function for the page
-            bool select_item;          ///< Whether an item is selected
-            uint8_t page_line = 0;     ///< Current line on the page
-            uint8_t page_col = 0;      ///< Current column on the page
-            uint8_t num_lines = 0;     ///< Number of lines on the page
-            uint8_t chars_on_line = 0; ///< Number of characters on the current line
-            char *buffer;              ///< Buffer for the page content
-            uint16_t buffer_size;      ///< Size of the buffer
-            void *parameters;          ///< Additional parameters for the page
-
-            /// @brief Constructor for errorPageInfo
-            /// @param page_type Type of the page
-            /// @param interactive Whether the page is interactive
-            /// @param callback Callback function for the page
-            /// @param buffer Buffer for the page content
-            /// @param buffer_size Size of the buffer
-            errorPageInfo(PAGE_TYPE page_type, bool interactive, menu_callback callback, char *buffer, uint16_t buffer_size)
-                : type(page_type), interactive(interactive), callback(callback), buffer(buffer), buffer_size(buffer_size)
-            {
-            }
-        };
+        typedef menuPageInfo errorPageInfo;
 
     }; // namespace structs
 
@@ -134,8 +115,6 @@ public:
     const char *text;                          ///< Text to be displayed
     char *buffer;                              ///< Buffer to hold the text
     size_t bufferSize;                         ///< Size of the buffer
-    int cursorX;                               ///< X position of the cursor
-    int cursorY;                               ///< Y position of the cursor
     bool blinkState;                           ///< State of the blink (on/off)
     bool blinkEnabled;                         ///< Whether blinking is enabled
     bool highlightEnabled;                     ///< Whether highlighting is enabled
@@ -158,30 +137,89 @@ public:
     ~OledMenu();
 
     /// @brief Initialize connected display
-    void initDisplay();
+    void init();
 
-    /// @brief Display the current page
-    void displayCurrentPage();
+    /// @brief Set the display anchor position.
+    /// @param x X position of the anchor.
+    /// @param y Y position of the anchor.
+    void setDisplayAnchor(int x, int y);
+
+    /// @brief Get the anchor position.
+    /// @param x X position of the anchor.
+    /// @param y Y position of the anchor.
+    void getDisplayAnchor(int &x, int &y);
+
+    /// @brief Set the cursor position.
+    /// @param x X position of the cursor.
+    /// @param y Y position of the cursor.
+    void setCursorPosition(int x, int y);
+
+    /// @brief Get cursor position.
+    /// @param x X position of the cursor.
+    /// @param y Y position of the cursor.
+    void getCursorPosition(int &x, int &y);
+
+    /// @brief Set the number of display lines.
+    /// @param num_lines Number of lines to display.
+    void setNumberOfDisplayLines(int num_lines);
+
+    /// @brief Get the number of display lines.
+    /// @return Number of lines to display.
+    int getNumberOfDisplayLines();
+
+    /// @brief Show an error message
+    /// @param fmt Format string for the error message
+    /// @param ... Additional arguments for the format string
+    /// @return Length of the error message
+    int showErrorMessage(const char *fmt, ...);
+
+    /// @brief Check if there is an active error
+    /// @return True if there is an active error, false otherwise
+    bool hasActiveError();
+
+    /// @brief Acknowledge an error
+    void acknowledgeError();
+
+    /// @brief Set the text to be displayed and scrolled.
+    /// @param txt The text to be displayed.
+    void setText(const char *txt);
+
+    /// @brief Set the text to be displayed and scrolled using an external buffer.
+    /// @param buf The buffer to hold the text.
+    /// @param bufSize The size of the buffer.
+    void setText(char *buf, size_t bufSize);
+
+    /// @brief Blink the text at the cursor position.
+    void blinkTextAtCursorPosition();
 
     /// @brief Display text on the screen
-    void displayTextOnScreen();
+    /// @param showCursor Whether to show the cursor.
+    void displayText(bool showCursor = false);
+
+    /// @brief Clear the display buffer
+    void clearDisplayBuffer();
+
+    /// @brief Refresh the display
+    void refreshDisplay();
+
+    /// @brief Scroll the display window
+    /// @param x X offset to scroll
+    /// @param y Y offset to scroll
+    void scroll(int x, int y);
 
     /// @brief Add a page to the menu
     /// @param type Type of the page
     /// @param interactive Whether the page is interactive
     /// @param callback Callback function for the page
     /// @param page_buffer Buffer for the page content
-    /// @param page_buffer_size Size of the page buffer
+    /// @param target_buffer_size Size of the page buffer
     /// @return True if the page was added successfully, false otherwise
-    bool addMenuPage(MENU::structs::PAGE_TYPE type, bool interactive, MENU::structs::menu_callback callback, char *page_buffer = nullptr, uint16_t page_buffer_size = 0);
+    bool addMenuPage(MENU::structs::PAGE_TYPE type, bool interactive, MENU::structs::menu_callback callback, char *page_buffer, uint16_t target_buffer_size);
 
     /// @brief Add an error page to the menu
     /// @param callback Callback function for the error page
     /// @return True if the error page was added successfully, false otherwise
     bool addErrorPage(MENU::structs::menu_callback callback);
-
-    /// @brief Refresh the display
-    void refreshDisplay();
 
     /// @brief Move to the next page
     void moveToNextPage();
@@ -195,24 +233,8 @@ public:
     /// @brief Move down an item in the menu
     void moveDownMenuItem();
 
-    /// @brief Clear the display buffer
-    void clearDisplayBuffer();
-
     /// @brief Clear the page buffer
     void clearPageBuffer();
-
-    /// @brief Acknowledge an error
-    void acknowledgeError();
-
-    /// @brief Check if there is an active error
-    /// @return True if there is an active error, false otherwise
-    bool hasActiveError();
-
-    /// @brief Show an error message
-    /// @param fmt Format string for the error message
-    /// @param ... Additional arguments for the format string
-    /// @return Length of the error message
-    int showErrorMessage(const char *fmt, ...);
 
     /// @brief Check if a page is entered
     /// @return True if a page is entered, false otherwise
@@ -229,36 +251,6 @@ public:
     /// @return True if the page was entered successfully, false otherwise
     bool enterCurrentPage();
 
-    /// @brief Set the text to be displayed and scrolled.
-    /// @param txt The text to be displayed.
-    void setScrollText(const char *txt);
-
-    /// @brief Set the text to be displayed and scrolled using an external buffer.
-    /// @param buf The buffer to hold the text.
-    /// @param bufSize The size of the buffer.
-    void setScrollText(char *buf, size_t bufSize);
-
-    /// @brief Display the text on the screen.
-    /// @param showCursor Whether to show the cursor.
-    void displayScrollText(bool showCursor);
-
-    /// @brief Manage the blinking state of the cursor.
-    void manageCursorBlink();
-
-    /// @brief Blink the text at the cursor position.
-    void blinkTextAtCursorPosition();
-
-    /// @brief Set the number of display lines.
-    /// @param num_lines Number of lines to display.
-    void setNumberOfDisplayLines(int num_lines);
-
-    /// @brief Get the number of display lines.
-    /// @return Number of lines to display.
-    int getNumberOfDisplayLines();
-
-    /// @brief Set the font size based on the number of lines to be displayed.
-    void setFontSizeForLineLimits();
-
     /// @brief Get the current X position of the cursor.
     /// @return The X position of the cursor.
     int getCursorXPosition();
@@ -267,14 +259,20 @@ public:
     /// @return The Y position of the cursor.
     int getCursorYPosition();
 
+private:
+    uint16_t maxWidth; ///< Maximum width of the display
+    uint16_t maxHeight; ///< Maximum height of the display
+    uint8_t calculateMaxCharsOnLine(char *buffer, uint16_t buffer_size);
+    /// @brief Manage the blinking state of the cursor.
+    void manageCursorBlink();
+
+    /// @brief Set the font size based on the number of lines to be displayed.
+    void setFontSizeForLineLimits();
+
     /// @brief Get the width of a character in the current font.
     /// @return The width of a character.
     int getFontCharacterWidth();
 
-    /// @brief Update the display, managing blinking and cursor state.
-    void updateDisplay();
-
-private:
     /// @brief Get the menu page info for a given page
     /// @param page Index of the page
     /// @return Pointer to the menu page info
@@ -284,6 +282,12 @@ private:
     /// @param page Index of the page
     /// @return Pointer to the error page info
     MENU::structs::errorPageInfo *getErrorPageInfo(uint8_t page);
+
+    /// @brief Render text for the current menu page
+    void renderMenuPageText();
+
+    /// @brief Render text for the current error page
+    void renderErrorPageText();
 };
 
 #endif // SSD1306_OLED_MENU

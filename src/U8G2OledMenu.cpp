@@ -6,12 +6,12 @@
 /// @param text_blink_delay Delay for text blinking
 OledMenu::OledMenu(U8G2 &display, uint16_t buffer_size, uint32_t text_blink_delay)
     : display_hal(display), display_buffer_size(buffer_size), mmptr(new MemoryManager(buffer_size)),
-      display_buffer(*mmptr), error_buffer_(reinterpret_cast<char *>(display_buffer.allocate(display_buffer.size() - 1))),
-      error_buffer_size(0), num_pages(0), page_buffer_(reinterpret_cast<char *>(display_buffer.allocate(display_buffer.size() / 2 - 1))),
+      display_buffer(*mmptr), error_buffer_(reinterpret_cast<char *>(display_buffer.allocate(display_buffer.size() / 2))),
+      error_buffer_size(display_buffer.size() / 2), num_pages(0), page_buffer_(nullptr),
       page_buffer_size(0), num_error(0), error_message_display_override(false), current_page_displayed(0),
       page_entered(false), line_blinking(false), display_connected(false), page_info(nullptr),
-      text(nullptr), buffer(nullptr), bufferSize(0), cursorX(0), cursorY(0), blinkState(false), blinkEnabled(false),
-      highlightEnabled(false), lastBlinkTime(0), minLines(1), maxLines(10), dispLines(4),
+      text(nullptr), buffer(nullptr), bufferSize(0), blinkState(false), blinkEnabled(false),
+      highlightEnabled(false), lastBlinkTime(0), minLines(1), maxLines(10), dispLines(4), maxWidth(display_hal.getDisplayWidth()), maxHeight(display_hal.getDisplayHeight()),
       u8g2_font_lookup_table{
           u8g2_font_3x3basic_tr, u8g2_font_u8glib_4_tr, u8g2_font_tiny5_tr, u8g2_font_5x7_tr,
           u8g2_font_6x10_tr, u8g2_font_t0_11_tr, u8g2_font_6x13_tr, u8g2_font_7x14_tr,
@@ -29,7 +29,7 @@ OledMenu::~OledMenu()
 }
 
 /// @brief Initialize connected display
-void OledMenu::initDisplay()
+void OledMenu::init()
 {
     if (display_hal.begin())
     {
@@ -37,42 +37,61 @@ void OledMenu::initDisplay()
         display_hal.setFont(u8g2_font_helvB08_tf);
         display_hal.setFontRefHeightExtendedText();
         display_hal.enableUTF8Print();
-        // conlog.update(true, LOG_LEVEL::INFO, F("SSD1306 display initialized.\n"));
     }
     else
     {
         display_connected = false;
-        // Handle display initialization error
-    }
-}
-
-/// @brief Display the current page
-void OledMenu::displayCurrentPage()
-{
-    if (display_connected)
-    {
-        page_info = getMenuPageInfo(current_page_displayed);
-        if (page_info->callback)
-        {
-            page_info->callback(page_info);
-            setScrollText(page_info->buffer, page_info->buffer_size);
-        }
-        else
-        {
-            setScrollText(page_info->buffer, page_info->buffer_size);
-        }
-        displayScrollText(false);
     }
 }
 
 /// @brief Display text on the screen
-void OledMenu::displayTextOnScreen()
+/// @param showCursor Whether to show the cursor.
+void OledMenu::displayText(bool showCursor)
 {
-    if (display_connected)
+    if (buffer == nullptr)
     {
-        setScrollText("Hello");
-        displayScrollText(false);
+        display_hal.clearBuffer();
+        display_hal.sendBuffer();
+        return;
     }
+
+    display_hal.clearBuffer();
+    setFontSizeForLineLimits();
+    display_hal.setFontMode(1); // Enable transparent mode for highlighting
+
+    int lineSpacing = display_hal.getMaxCharHeight();
+    int maxLines = display_hal.getDisplayHeight() / lineSpacing;
+    char *line;
+    char *savePtr;
+
+    line = strtok_r(buffer, "\n", &savePtr);
+
+    int currentY = page_info->anchorY;
+    int lineCount = 0;
+    while (line != NULL && lineCount < maxLines)
+    {
+        if (highlightEnabled)
+        {
+            display_hal.drawBox(page_info->anchorX, currentY - lineSpacing, maxWidth, lineSpacing);
+        }
+        display_hal.drawStr(page_info->anchorX, currentY, line);
+        if (showCursor)
+        {
+            display_hal.drawVLine(page_info->cursorX, currentY - lineSpacing, lineSpacing);
+        }
+        currentY += lineSpacing;
+        line = strtok_r(NULL, "\n", &savePtr);
+        lineCount++;
+    }
+
+    // Fill remaining lines with empty space if less than maxLines
+    while (lineCount < maxLines)
+    {
+        currentY += lineSpacing;
+        lineCount++;
+    }
+
+    display_hal.sendBuffer();
 }
 
 /// @brief Add a page to the menu
@@ -80,18 +99,33 @@ void OledMenu::displayTextOnScreen()
 /// @param interactive Whether the page is interactive
 /// @param callback Callback function for the page
 /// @param page_buffer Buffer for the page content
-/// @param page_buffer_size Size of the page buffer
+/// @param target_buffer_size Size of the page buffer
 /// @return True if the page was added successfully, false otherwise
-bool OledMenu::addMenuPage(MENU::structs::PAGE_TYPE type, bool interactive, MENU::structs::menu_callback callback, char *page_buffer, uint16_t page_buffer_size)
+bool OledMenu::addMenuPage(MENU::structs::PAGE_TYPE type, bool interactive, MENU::structs::menu_callback callback, char *page_buffer, uint16_t target_buffer_size)
 {
-    if (page_buffer == nullptr || page_buffer_size == 0)
+    if (page_buffer == nullptr || target_buffer_size == 0)
     {
         page_buffer = page_buffer_;
-        page_buffer_size = page_buffer_size;
+        target_buffer_size = page_buffer_size;
     }
 
-    if (pages.insertAtEnd(type, interactive, callback, page_buffer_, page_buffer_size))
+    MENU::structs::menuPageInfo page_info(type, interactive, callback, page_buffer, target_buffer_size);
+    page_info.callback(&page_info); // Call the callback function to populate the page buffer
+
+    // Check if the buffer size is sufficient
+    if (page_info.needs_buffer_size > target_buffer_size)
     {
+        clearDisplayBuffer();
+        snprintf(error_buffer_, error_buffer_size, "Insufficient display_buffer size");
+        displayText(false);
+        return false;
+    }
+
+    pages.insertAtEnd(type, interactive, callback, page_buffer, target_buffer_size);
+    MENU::structs::menuPageInfo *page = pages.getLastAccessedNodeStoragePtr();
+    if (page)
+    {
+        page->max_chars_on_line = calculateMaxCharsOnLine(page_buffer, target_buffer_size); // Set max_chars_on_line
         num_pages++;
         return true;
     }
@@ -103,8 +137,53 @@ bool OledMenu::addMenuPage(MENU::structs::PAGE_TYPE type, bool interactive, MENU
 /// @return True if the error page was added successfully, false otherwise
 bool OledMenu::addErrorPage(MENU::structs::menu_callback callback)
 {
-    num_error++;
-    return error_pages.insertAtEnd(MENU::structs::PAGE_TYPE::ERROR, false, callback, error_buffer_, error_buffer_size);
+    MENU::structs::errorPageInfo page_info(MENU::structs::PAGE_TYPE::ERROR, false, callback, error_buffer_, error_buffer_size);
+    page_info.callback(&page_info); // Call the callback function to populate the page buffer
+
+    // Check if the buffer size is sufficient
+    if (page_info.needs_buffer_size > error_buffer_size)
+    {
+        clearDisplayBuffer();
+        snprintf(error_buffer_, error_buffer_size, "Insufficient display_buffer size");
+        displayText(false);
+        return false;
+    }
+
+    pages.insertAtEnd(MENU::structs::PAGE_TYPE::ERROR, false, callback, error_buffer_, error_buffer_size);
+    MENU::structs::errorPageInfo *page = error_pages.getLastAccessedNodeStoragePtr();
+    if (page)
+    {
+        page->max_chars_on_line = calculateMaxCharsOnLine(error_buffer_, error_buffer_size); // Set max_chars_on_line
+        num_error++;
+        return true;
+    }
+    return false;
+}
+
+uint8_t OledMenu::calculateMaxCharsOnLine(char *buffer, uint16_t buffer_size)
+{
+    uint8_t max_chars = 0;
+    uint8_t current_chars = 0;
+    for (uint16_t i = 0; i < buffer_size; i++)
+    {
+        if (buffer[i] == '\n' || buffer[i] == '\0')
+        {
+            if (current_chars > max_chars)
+            {
+                max_chars = current_chars;
+            }
+            current_chars = 0;
+            if (buffer[i] == '\0')
+            {
+                break;
+            }
+        }
+        else
+        {
+            current_chars++;
+        }
+    }
+    return max_chars;
 }
 
 /// @brief Refresh the display
@@ -112,7 +191,15 @@ void OledMenu::refreshDisplay()
 {
     if (display_connected)
     {
-        updateDisplay();
+        if (error_message_display_override)
+        {
+            renderErrorPageText();
+        }
+        else
+        {
+            renderMenuPageText();
+        }
+        manageCursorBlink();
     }
 }
 
@@ -214,18 +301,21 @@ int OledMenu::showErrorMessage(const char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     int len = vsnprintf(NULL, 0, fmt, args);
-    display_buffer.reallocate(error_buffer_, error_buffer_size - len + 1);
 
-    if (error_buffer_ != nullptr)
+    if (len >= error_buffer_size)
     {
-        va_start(args, fmt);
-        vsnprintf(error_buffer_, len, fmt, args);
+        clearDisplayBuffer();
+        snprintf(error_buffer_, error_buffer_size, "Insufficient display_buffer size");
+        displayText(false);
         va_end(args);
-        error_pages.insertAtEnd(MENU::structs::PAGE_TYPE::ERROR, false, nullptr, error_buffer_, len);
-        return len;
+        return -1;
     }
+
+    va_start(args, fmt);
+    vsnprintf(error_buffer_, len + 1, fmt, args);
     va_end(args);
-    return strlen(error_buffer_) + 1 - error_buffer_size;
+
+    return len;
 }
 
 /// @brief Check if a page is entered
@@ -278,76 +368,35 @@ MENU::structs::errorPageInfo *OledMenu::getErrorPageInfo(uint8_t page)
 
 /// @brief Set the text to be displayed and scrolled.
 /// @param txt The text to be displayed.
-void OledMenu::setScrollText(const char *txt)
+void OledMenu::setText(const char *txt)
 {
-    text = txt;
-    buffer = nullptr;
-    bufferSize = 0;
+    size_t len = strlen(txt) + 1;
+    if (len > display_buffer_size)
+    {
+        clearDisplayBuffer();
+        snprintf(error_buffer_, error_buffer_size, "Insufficient display_buffer size");
+        displayText(false);
+        return;
+    }
+    strncpy(reinterpret_cast<char *>(display_buffer.allocate(len)), txt, len);
+    buffer = reinterpret_cast<char *>(display_buffer.allocate(len));
+    bufferSize = len;
 }
 
 /// @brief Set the text to be displayed and scrolled using an external buffer.
 /// @param buf The buffer to hold the text.
 /// @param bufSize The size of the buffer.
-void OledMenu::setScrollText(char *buf, size_t bufSize)
+void OledMenu::setText(char *buf, size_t bufSize)
 {
-    text = nullptr;
-    buffer = buf;
-    bufferSize = bufSize;
-}
-
-/// @brief Display the text on the screen.
-/// @param showCursor Whether to show the cursor.
-void OledMenu::displayScrollText(bool showCursor)
-{
-    if (text == nullptr && buffer == nullptr)
+    if (bufSize > display_buffer_size)
     {
+        clearDisplayBuffer();
+        snprintf(error_buffer_, error_buffer_size, "Insufficient display_buffer size");
+        displayText(false);
         return;
     }
-    display_hal.clearBuffer();
-    setFontSizeForLineLimits();
-    display_hal.setFontMode(1); // Enable transparent mode for highlighting
-
-    int lineSpacing = display_hal.getMaxCharHeight();
-    int maxLines = display_hal.getDisplayHeight() / lineSpacing;
-    char *line;
-    char *savePtr;
-
-    if (buffer)
-    {
-        line = strtok_r(buffer, "\n", &savePtr);
-    }
-    else
-    {
-        const char *tempText = text;
-        line = strtok_r(const_cast<char *>(tempText), "\n", &savePtr);
-    }
-
-    int currentY = cursorY;
-    int lineCount = 0;
-    while (line != NULL && lineCount < maxLines)
-    {
-        if (highlightEnabled)
-        {
-            display_hal.drawBox(0, currentY - lineSpacing, display_hal.getDisplayWidth(), lineSpacing);
-        }
-        display_hal.drawStr(cursorX, currentY, line);
-        if (showCursor)
-        {
-            display_hal.drawVLine(cursorX, currentY - lineSpacing, lineSpacing);
-        }
-        currentY += lineSpacing;
-        line = strtok_r(NULL, "\n", &savePtr);
-        lineCount++;
-    }
-
-    // Fill remaining lines with empty space if less than maxLines
-    while (lineCount < maxLines)
-    {
-        currentY += lineSpacing;
-        lineCount++;
-    }
-
-    display_hal.sendBuffer();
+    buffer = buf;
+    bufferSize = bufSize;
 }
 
 /// @brief Manage the blinking state of the cursor.
@@ -364,7 +413,7 @@ void OledMenu::manageCursorBlink()
 /// @brief Blink the text at the cursor position.
 void OledMenu::blinkTextAtCursorPosition()
 {
-    displayScrollText(blinkState);
+    displayText(blinkState);
 }
 
 /// @brief Set the number of display lines.
@@ -395,7 +444,7 @@ int OledMenu::getNumberOfDisplayLines()
 /// @brief Set the font size based on the number of lines to be displayed.
 void OledMenu::setFontSizeForLineLimits()
 {
-    uint8_t fontPixelHeight = display_hal.getDisplayHeight() / dispLines;
+    uint8_t fontPixelHeight = maxHeight / dispLines;
     if (fontPixelHeight >= fontMinPixelHeight && fontPixelHeight <= fontMaxPixelHeight)
     {
         // Ensure the lookup table is defined and within bounds
@@ -421,14 +470,14 @@ void OledMenu::setFontSizeForLineLimits()
 /// @return The X position of the cursor.
 int OledMenu::getCursorXPosition()
 {
-    return cursorX;
+    return page_info->cursorX;
 }
 
 /// @brief Get the current Y position of the cursor.
 /// @return The Y position of the cursor.
 int OledMenu::getCursorYPosition()
 {
-    return cursorY;
+    return page_info->cursorY;
 }
 
 /// @brief Get the width of a character in the current font.
@@ -438,11 +487,114 @@ int OledMenu::getFontCharacterWidth()
     return display_hal.getMaxCharWidth();
 }
 
-/// @brief Update the display, managing blinking and cursor state.
-void OledMenu::updateDisplay()
+/// @brief Set the display anchor position.
+/// @param x X position of the anchor.
+/// @param y Y position of the anchor.
+void OledMenu::setDisplayAnchor(int x, int y)
 {
-    blinkTextAtCursorPosition();
-    manageCursorBlink();
+    page_info->anchorX = x;
+    page_info->anchorY = y + display_hal.getMaxCharHeight();
+}
+
+/// @brief Get the anchor position.
+/// @param x X position of the anchor.
+/// @param y Y position of the anchor.
+void OledMenu::getDisplayAnchor(int &x, int &y)
+{
+    x = page_info->anchorX;
+    y = page_info->anchorY;
+}
+
+/// @brief Set the cursor position.
+/// @param x X position of the cursor.
+/// @param y Y position of the cursor.
+void OledMenu::setCursorPosition(int x, int y)
+{
+    page_info->cursorX = x;
+    page_info->cursorY = y;
+}
+
+/// @brief Get cursor position.
+/// @param x X position of the cursor.
+/// @param y Y position of the cursor.
+void OledMenu::getCursorPosition(int &x, int &y)
+{
+    x = page_info->cursorX;
+    y = page_info->cursorY;
+}
+
+void OledMenu::scroll(int x, int y)
+{
+    // Calculate text width and height based on max_chars_on_line and num_lines
+    int textWidth = getFontCharacterWidth() * page_info->max_chars_on_line;
+    int textHeight = display_hal.getMaxCharHeight() * page_info->num_lines;
+
+    // Calculate new cursor position
+    int newCursorX = page_info->cursorX + x;
+    int newCursorY = page_info->cursorY + y;
+
+    // Ensure cursor stays within the bounds of the display
+    if (newCursorX < 0)
+    {
+        newCursorX = 0;
+    }
+    else if (newCursorX > maxWidth - getFontCharacterWidth())
+    {
+        newCursorX = maxWidth - getFontCharacterWidth();
+    }
+
+    if (newCursorY < 0)
+    {
+        newCursorY = 0;
+    }
+    else if (newCursorY > maxHeight - display_hal.getMaxCharHeight())
+    {
+        newCursorY = maxHeight - display_hal.getMaxCharHeight();
+    }
+
+    // Update cursor position
+    page_info->cursorX = newCursorX;
+    page_info->cursorY = newCursorY;
+
+    // Calculate offsets if cursor is at the edge
+    int offsetX = page_info->anchorX;
+    int offsetY = page_info->anchorY;
+
+    if (newCursorX == 0 || newCursorX == maxWidth - getFontCharacterWidth())
+    {
+        offsetX = (maxWidth - textWidth) / 2 + x;
+    }
+
+    if (newCursorY == 0 || newCursorY == maxHeight - display_hal.getMaxCharHeight())
+    {
+        offsetY = (maxHeight - textHeight) / 2 + y;
+    }
+
+    // Store offsets for later use in rendering
+    page_info->anchorX = offsetX;
+    page_info->anchorY = offsetY;
+}
+
+/// @brief Render text for the current menu page
+void OledMenu::renderMenuPageText()
+{
+    page_info = getMenuPageInfo(current_page_displayed);
+    if (page_info->callback)
+    {
+        page_info->callback(page_info);
+    }
+    buffer = page_info->buffer;
+    bufferSize = page_info->needs_buffer_size;
+    displayText(false);
+}
+
+/// @brief Render text for the current error page
+void OledMenu::renderErrorPageText()
+{
+    MENU::structs::errorPageInfo *error_page_info = getErrorPageInfo(current_page_displayed);
+    buffer = error_page_info->buffer;
+    bufferSize = error_page_info->needs_buffer_size;
+    displayText(false);
 }
 
 /// @brief Function to display connection information on the OLED menu
